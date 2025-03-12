@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chart Display</title>
+  <style>
+    .chart-container {
+      width: 100%;
+      height: 600px;
+      margin-bottom: 20px;
+    }
+
+    #controls {
+      text-align: center;
+      /* Center the buttons */
+      margin-top: 20px;
+      /* Add some space above the buttons */
+    }
+
+    #controls button {
+      padding: 10px 20px;
+      /* Add padding to the buttons */
+      font-size: 16px;
+      /* Adjust font size */
+      margin: 0 10px;
+      /* Add margin between buttons */
+      cursor: pointer;
+      /* Change cursor to pointer on hover */
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="chart-container" id="linear-chart-container">
+    <h3>Linear Scale Chart</h3>
+    {{ graph_html_linear|safe }}
+  </div>
+
+  <div class="chart-container" id="log-chart-container" style="display: none;">
+    <h3>Logarithmic Scale Chart</h3>
+    {{ graph_html_log|safe }}
+  </div>
+
+  <div id="controls">
+    <button id="linear-button">Linear</button>
+    <button id="log-button">Log</button>
+  </div>
+
+  <script>
+    // ... (your JavaScript code remains the same)
+    const linearContainer = document.getElementById('linear-chart-container');
+    const logContainer = document.getElementById('log-chart-container');
+    const linearButton = document.getElementById('linear-button');
+    const logButton = document.getElementById('log-button');
+
+    function resizePlots() {
+      const linearPlotDiv = linearContainer.querySelector('.js-plotly-plot');
+      const logPlotDiv = logContainer.querySelector('.js-plotly-plot');
+
+      if (linearPlotDiv) {
+        Plotly.relayout(linearPlotDiv, {
+          width: linearContainer.offsetWidth,
+          height: linearContainer.offsetHeight
+        });
+      }
+
+      if (logPlotDiv) {
+        Plotly.relayout(logPlotDiv, {
+          width: logContainer.offsetWidth,
+          height: logContainer.offsetHeight
+        });
+      }
+    }
+
+    // Initial resize and display linear chart
+    resizePlots();
+    linearContainer.style.display = 'block';
+    logContainer.style.display = 'none';
+
+    // Resize on window resize
+    window.addEventListener('resize', resizePlots);
+
+    linearButton.addEventListener('click', () => {
+      if (linearContainer.style.display !== 'block') {
+        linearContainer.style.display = 'block';
+        logContainer.style.display = 'none';
+        resizePlots(); // Resize plots after switching
+      }
+    });
+
+    logButton.addEventListener('click', () => {
+      if (logContainer.style.display !== 'block') {
+        logContainer.style.display = 'block';
+        linearContainer.style.display = 'none';
+        resizePlots(); // Resize plots after switching
+      }
+    });
+  </script>
+
+</body>
+
+</html>

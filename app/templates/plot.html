@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>My Plot</title>
+</head>
+
+<style>
+  #custom-legend button {
+    margin-right: 30px;
+    /* Adjust the value as needed */
+  }
+</style>
+
+<body>
+  <div id="plot-container">
+    {% if plots %}
+    <h3>Plots</h3>
+    <div id="linear-plot" class="plotly-graph-div" style="display: block;">{{ plots.linear|safe }}</div>
+    <div id="logarmithmic-plot" class="plotly-graph-div" style="display: none;">{{ plots.log|safe }}</div>
+    {% endif %}
+  </div>
+  <div id="plot-another-container"></div>
+
+
+  <div id="functionize-button">
+    <button onclick="automaticUpdate();">Construct Function</button>
+  </div>
+
+  <div id="custom-legend">
+    <!-- <button id="legend-original" onclick="updateOriginal();">Toggle Original</button>
+    <button id="legend-fitted" onclick="updateFitted();">Toggle Fitted</button> -->
+    <button id="legend-derivative" onclick="updateDerivative();">Toggle Derivative</button>
+    <button id="save-small" onclick="saveSmall();">Small=False</button>
+  </div>
+
+  <!-- Move form inside body -->
+  <form onsubmit="event.preventDefault(); submitSliderValues();">
+    <div id="sliders">
+      {% for symbol, weight, slider_value, is_reg in all_assets %}
+      <div class="slider-group">
+        <label>{{ symbol }}({{ 'Regular' if is_reg else 'Inverse' }})</label>
+        <input type="range" class="slider" data-symbol="{{ symbol }}" min="0" max="100" value="{{ slider_value }}"
+          oninput="document.getElementById('{{ symbol }}-value').textContent = this.value + '%'">
+        <span id="{{ symbol }}-value">{{ slider_value }}%</span>
+      </div>
+      {% endfor %}
+    </div>
+    <!-- <button type="submit">Update Chart</button> -->
+  </form>
+  <form>
+    <div id="smoothing-slider-group" class="slider-group">
+      <label for="smoothing-slider">Smoothing:</label>
+      <input type="range" class="slider" id="smoothing-slider" min="1" max="50" step="1" value="50"
+        oninput="document.getElementById('smoothing-value').textContent = this.value; updateSmoothingFunction();">
+      <span id="smoothing-value">50</span>
+    </div>
+  </form>
+
+  <form>
+    <div id="degree-slider-group" class="slider-group">
+      <label for="degree-slider">Degree:</label>
+      <input type="range" class="slider" id="degree-slider" min="1" max="50" step="1" value="50"
+        oninput="document.getElementById('degree-value').textContent = this.value; updateSmoothingFunction();">
+      <span id="degree-value">50</span>
+    </div>
+  </form>
+
+  <!-- <div id="toggle-smooth-button" class="button-group">
+    <button onclick="toggleSmooth();">Toggle Smooth</button>
+  </div> -->
+
+  <!-- Plot containers -->
+  <div id="controls">
+    <button onclick="togglePlotType('linear')">Linear Scale</button>
+    <button onclick="togglePlotType('log')">Log Scale</button>
+  </div>
+</body>
+
+<script>
+  let currentPlot = null;
+  let isSmooth = false;
+  let isLog = false;
+  let saveSmallVar = false;
+
+  let cachedPlotData;
+  let cachedInitialInvestment;
+
+  let traceVisibility = {
+    'Original Data': true,
+    'Fitted Line': true,
+    'Derivative': false
+  };
+
+
+  // Initialize from template variables
+  window.currentCacheId = "{{ cache_id }}";
+  window.allAssets = {{ all_assets | tojson }};
+
+
+  function togglePlotType(type) {
+    // Implement your toggle logic
+    console.log("Toggling plot type to:", type);
+    let currentLayout = document.getElementById('plot-another-container').layout;
+    // let newYaxisType = type === 'log' ? 'log' : 'linear';
+    isLog = type === 'log';
+
+    let update = {
+      yaxis: {
+        type: type
+      }
+    };
+
+    Plotly.relayout('plot-another-container', update);
+  }
+
+  async function toggleSmooth() {
+    isSmooth = !isSmooth;
+    console.log("IS smooth is: " + isSmooth);
+
+    let smoothValue = document.getElementById('smoothing-slider').value;
+
+    const sliderValues = {};
+    document.querySelectorAll('.slider').forEach(slider => {
+      const symbol = slider.dataset.symbol;
+      sliderValues[symbol] = parseFloat(slider.value);
+    });
+
+    console.log("Smoothing values are updated according to this number: " + smoothValue);
+
+    try {
+      const response = await fetch('/update_smooth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          smoothValue: smoothValue,
+          sliderValues: sliderValues,
+          cache_id: currentCacheId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        // console.log("The smoothing function has been updated " + sliderValue);
+        console.log("SUCCESS!!", data);
+        updatePlot(data.plotData, data.totalInvestment);
+      }
+    } catch (error) {
+      console.log("OK getting here in the error tab");
+      console.error('Update failed:', error);
+    }
+  }
+
+  function updateSmoothingFunction() {
+    // Implement your smoothing function logic
+
+    let smoothingValue = document.getElementById('smoothing-slider').value;
+
+    console.log("The smoothing function has been updated " + smoothingValue);
+  }
+
+  async function submitSliderValues() {
+    const sliderValues = {};
+    document.querySelectorAll('.slider').forEach(slider => {
+      const symbol = slider.dataset.symbol;
+      sliderValues[symbol] = parseFloat(slider.value);
+    });
+
+    const prevPlotContainer = document.getElementById("plot-container");
+    if (prevPlotContainer.children.length > 0) {
+      prevPlotContainer.removeChild(prevPlotContainer.children[0]);
+      prevPlotContainer.removeChild(prevPlotContainer.children[0]);
+    }
+
+
+    try {
+      const response = await fetch('/update_slider', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sliderValues: sliderValues,
+          cache_id: currentCacheId
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        console.log("SUCCESS!!", data.totalInvestment);
+        updatePlot(data.plotData, data.totalInvestment);
+      }
+    } catch (error) {
+      console.error('Update failed:', error);
+    }
+  }
+
+  /*
+  function updateOriginal() {
+    traceVisibility['Original Data'] = !traceVisibility['Original Data'];
+    updatePlotVisibility();
+  }
+
+  function updateFitted() {
+    traceVisibility['Fitted Line'] = !traceVisibility['Fitted Line'];
+    updatePlotVisibility();
+  }*/
+
+  function updateDerivative() {
+    traceVisibility['Original Data'] = !traceVisibility['Original Data'];
+    traceVisibility['Fitted Line'] = !traceVisibility['Fitted Line'];
+    traceVisibility['Derivative'] = !traceVisibility['Derivative'];
+    updatePlotVisibility();
+  }
+
+  function updatePlotVisibility() {
+    const originalVisible = traceVisibility['Original Data'];
+    const fittedVisible = traceVisibility['Fitted Line'];
+    const derivativeVisible = traceVisibility['Derivative'];
+
+    Plotly.restyle('plot-another-container', {
+      visible: [originalVisible, fittedVisible, derivativeVisible] // Adjust index based on trace order
+    });
+  }
+
+
+  function updatePlot(plotData, initialInvestment, functionData = null, derivativeData = null) {
+    let traces = [];
+
+    // console.log("The number of data points in the function data is: " + functionData.x.length);
+    // console.log("The number of data points in the plot data is: " + plotData.x.length);
+    // y: .map(y => y + initialInvestment),
+
+    if (plotData) {
+      traces.push({
+        x: plotData.x,
+        y: plotData.y,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Original Data',
+        visible: traceVisibility['Original Data'] ? true : false
+      });
+    }
+
+    if (functionData) {
+      traces.push({
+        x: plotData.x,
+        y: functionData.y,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Fitted Line',
+        visible: traceVisibility['Fitted Line'] ? true : false
+      });
+    }
+
+    if (derivativeData) {
+      traces.push({
+        x: plotData.x,
+        y: derivativeData.y,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Derivative',
+        visible: traceVisibility['Derivative'] ? true : false
+      });
+    }
+
+
+    const plotDiv = document.getElementById('plot-another-container');
+    const width = plotDiv.offsetWidth;
+    const height = plotDiv.offsetHeight;
+
+    let title = 'Total investment: ' + initialInvestment;
+
+    let layout = {
+      title: title,
+      width: width,
+      height: height,
+      yaxis: {
+        type: isLog ? 'log' : 'linear'
+      },
+      line: {
+        shape: 'spline' // Or 'monotone'
+      }
+    };
+
+    function resizePlot() {
+      const plotDiv = document.getElementById('plot-another-container');
+      const width = plotDiv.offsetWidth;
+      const height = plotDiv.offsetHeight;
+
+      let updatedLayout = {
+        title: title,
+        width: width,
+        height: height,
+        yaxis: {
+          type: isLog ? 'log' : 'linear'
+        },
+        line: {
+          shape: 'spline'
+        }
+      };
+
+      if (currentPlot) {
+        Plotly.react('plot-another-container', traces, updatedLayout);
+      } else {
+        currentPlot = Plotly.newPlot('plot-another-container', traces, updatedLayout);
+      }
+    }
+
+    resizePlot();
+    window.addEventListener('resize', resizePlot);
+
+    if (!currentPlot) {
+      currentPlot = Plotly.newPlot('plot-another-container', traces, layout);
+    } else {
+      Plotly.react('plot-another-container', traces, layout);
+    }
+  }
+
+  async function automaticUpdate() {
+    let smoothValue = document.getElementById('smoothing-slider').value;
+    let degreeValue = document.getElementById('degree-slider').value;
+
+
+    const sliderValues = {};
+    document.querySelectorAll('.slider').forEach(slider => {
+      const symbol = slider.dataset.symbol;
+      sliderValues[symbol] = parseFloat(slider.value);
+    });
+
+    try {
+      const response = await fetch('/construct_function', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sliderValues: sliderValues,
+          smoothValue: smoothValue,
+          saveSmall: saveSmallVar,
+          degreeValue: degreeValue,
+          cache_id: currentCacheId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        updatePlot(data.plotData, data.totalInvestment, data.functionData, data.derivativeData);
+      }
+    } catch (error) {
+      console.error('Update failed:', error);
+    }
+  }
+
+  function saveSmall() {
+    saveSmallVar = !saveSmallVar
+    var saveSmallButton = document.getElementById("save-small")
+    if (saveSmallVar) {
+      saveSmallButton.innerHTML = "Small=True";
+    } else {
+      saveSmallButton.innerHTML = "Small=False";
+    }
+    console.log("Save small is:", saveSmallVar);
+  }
+
+</script>
+
+</html>

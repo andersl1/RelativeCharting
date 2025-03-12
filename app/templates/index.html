@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Index</title>
+  <style>
+    .complex {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <button id="toggleButton">Toggle Complex</button>
+
+  <div class="simple">
+    <form action="/plot" method="post">
+      <h3>Simple Plot</h3>
+      <div class="asset">
+        <label for="symbol1">Symbol 1:</label>
+        <input type="text" id="simple_chart1" name="simple_chart1">
+      </div>
+      <div class="asset">
+        <label for="symbol2">Symbol 2:</label>
+        <input type="text" id="simple_chart2" name="simple_chart2">
+      </div>
+      <button type="submit">Plot</button>
+    </form>
+  </div>
+
+  <div class="complex" style="display: none;">
+    <form action="/plot_test" method="post" onsubmit="submitForm(event)">
+      <h3>Test Percentage Logic - Regular Chart</h3>
+      <div id="regular-test-assets">
+        <div class="asset">
+          <label for="regular_test_chart0">Chart 0:</label>
+          <input type="text" id="regular_test_chart0" name="regular_test_chart0">
+          <label for="regular_test_weight0">Weight:</label>
+          <input type="number" id="regular_test_weight0" name="regular_test_weight0">
+          <button type="button" onclick="removeAsset('regular');">Remove Asset</button>
+        </div>
+      </div>
+      <button type="button" onclick="addTestAsset('regular');">Add Asset</button>
+
+      <h3>Test Percentage Logic - Inverse Chart</h3>
+      <div id="inverse-test-assets">
+        <div class="asset">
+          <label for="inverse_test_chart0">Chart 0:</label>
+          <input type="text" id="inverse_test_chart0" name="inverse_test_chart0">
+          <label for="inverse_test_weight0">Weight:</label>
+          <input type="number" id="inverse_test_weight0" name="inverse_test_weight0">
+          <button type="button" onclick="removeAsset('inverse');">Remove Asset</button>
+        </div>
+      </div>
+      <button type="button" onclick="addTestAsset('inverse');">Add Asset</button>
+      <br>
+      <input type="hidden" id="regular_count_hidden" name="regular_count" value="{{ regular_count | tojson }}">
+      <input type="hidden" id="inverse_count_hidden" name="inverse_count" value="{{ inverse_count | tojson }}">
+      <button type="submit">Test Percentage Logic</button>
+    </form>
+  </div>
+
+
+  <script>
+    const toggleButton = document.getElementById('toggleButton');
+    const simpleForm = document.querySelector('.simple');
+    const complexForm = document.querySelector('.complex');
+
+    let isSimple = true; // Start with simple form visible
+
+    toggleButton.addEventListener('click', () => {
+      if (isSimple) {
+        simpleForm.style.display = 'none';
+        complexForm.style.display = 'block';
+        toggleButton.textContent = 'Toggle Simple';
+      } else {
+        simpleForm.style.display = 'block';
+        complexForm.style.display = 'none';
+        toggleButton.textContent = 'Toggle Complex';
+      }
+      isSimple = !isSimple;
+    });
+
+    let regularCount = {{ regular_count | tojson }};
+    let inverseCount = {{ inverse_count | tojson }};
+    console.log("Regular Count:", regularCount);
+    console.log("Inverse Count:", inverseCount);
+
+    function removeAsset(type) {
+      if (type == 'inverse') {
+        inverseCount--;
+      } else if (type == 'regular') {
+        regularCount--;
+      }
+
+      const assetContainer = document.getElementById(`${type}-test-assets`);
+      assetContainer.removeChild(assetContainer.children[0]);
+      console.log("Remove asset of type:", type, "New Count: (regular then inverse)", regularCount, inverseCount);
+    }
+
+    function addTestAsset(type) {
+      let assetCount;
+      if (type === 'regular') {
+        assetCount = regularCount++;
+      } else if (type === 'inverse') {
+        assetCount = inverseCount++;
+      }
+
+      const assetId = `${type}_test_chart${assetCount}`;
+      const weightId = `${type}_test_weight${assetCount}`;
+
+      const assetContainer = document.createElement('div');
+      assetContainer.className = 'asset';
+
+      const label = document.createElement('label');
+      label.htmlFor = assetId;
+      label.innerText = `Chart ${assetCount}:`;
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = assetId;
+      input.name = assetId;
+
+      const weightLabel = document.createElement('label');
+      weightLabel.htmlFor = weightId;
+      weightLabel.innerText = 'Weight:';
+
+      const weightInput = document.createElement('input');
+      weightInput.type = 'number';
+      weightInput.id = weightId;
+      weightInput.name = weightId;
+
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.innerText = 'Remove Asset';
+      removeButton.onclick = function () {
+        if (type === 'regular') {
+          regularCount--;
+        } else if (type === 'inverse') {
+          inverseCount--;
+        }
+        assetContainer.remove();
+      };
+
+      assetContainer.appendChild(label);
+      assetContainer.appendChild(input);
+      assetContainer.appendChild(weightLabel);
+      assetContainer.appendChild(weightInput);
+      assetContainer.appendChild(removeButton);
+
+      document.getElementById(`${type}-test-assets`).appendChild(assetContainer);
+    }
+
+    function submitSliderValue(event) {
+      event.preventDefault(); // Prevent form submission
+      var assets = {};
+      document.querySelectorAll('.slider-container').forEach(function (container) {
+        var sliderValue = container.querySelector('input[type="range"]').value;
+        var assetId = container.querySelector('input[type="range"]').id.replace('-slider', '');
+        assets[assetId] = sliderValue;
+      });
+
+      console.log('Submitting slider values:', assets); // Debug print statement
+
+      // Send the slider values to the backend
+      fetch('/update_slider', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(assets)
+      }).then(response => response.json())
+        .then(data => console.log('Backend response:', data))
+        .catch(error => console.error('Error:', error)); // Debug print statement
+    }
+
+    function submitForm(event) {
+      // This function will be called when the main form is submitted
+      // It should handle the submission of asset data, NOT slider values
+      event.preventDefault(); // Prevent default form submission
+
+      // Get regular and inverse counts before submitting the form
+      document.getElementById('regular_count_hidden').value = regularCount;
+      document.getElementById('inverse_count_hidden').value = inverseCount;
+
+      console.log("Regular Count:", regularCount);
+      console.log("Inverse Count HERE:", inverseCount);
+
+      const formData = new FormData(event.target);
+
+      fetch('/plot_test', {
+        method: 'POST',
+        body: formData
+      })
+        .then(response => response.text())
+        .then(html => {
+          document.open();
+          document.write(html);
+          document.close();
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    function submitSliderValue(event) {
+      event.preventDefault(); // Prevent form submission
+      var assets = {};
+      document.querySelectorAll('.slider-container').forEach(function (container) {
+        var sliderValue = container.querySelector('input[type="range"]').value;
+        var assetId = container.querySelector('input[type="range"]').id.replace('-slider', '');
+        assets[assetId] = sliderValue;
+      });
+
+      console.log('Submitting slider values:', assets); // Debug print statement
+
+      // Send the slider values to the backend
+      fetch('/update_slider', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(assets)
+      }).then(response => response.json())
+        .then(data => console.log('Backend response:', data))
+        .catch(error => console.error('Error:', error)); // Debug print statement
+    }
+  </script>
+
+</body>
+
+</html>
